@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+
+{% block meta_tags %}{% endblock meta_tags %}
+
+{% block title %}{{ title }}{% endblock title %}
+
+{% block body %}
+    <div class="main_container">
+        <div class="inner_container">
+            <table class="main_table" id="device_table">
+                <tr>
+                    <th>№</th>
+                    <th>Действия</th>
+                    <th>Название устройства</th>
+                    <th>IP</th>
+                    <th>Статус</th>
+                    <th>Контроль напряжения</th>
+                    <th>Контроль реле</th>
+                    <th>Контроль сенсеров</th>
+                    <th>Заметка</th>
+                </tr>
+                {% for device in devices %}
+                    <tr>
+                        <td class="text namber">{{ loop.index }}</td>
+                        <td class="text action">
+                            <a href="{{ url_for('edit_device', id_device=device.id) }}">
+                                <img src="{{ url_for('static', filename='img/pencil.ico') }}" alt="">
+                            </a>
+                            <a href="{{ url_for('remove_device', id_device=device.id) }}">
+                                <img src="{{ url_for('static', filename='img/delete.ico') }}" alt="">
+                            </a>
+                        </td> 
+                        <td class="text name">
+                            {{ device.name }}
+                        </td>
+                        <td class="text ip">
+                            {{ device.ip }}
+                        </td>
+                        <td align="center" class="status">
+                            <div class="circle" style="background-color: grey;"> </div>
+                        </td>
+                        <td class="text voltage_levels">
+                            <div class="inner_voltage_levels">
+                            
+                            </div>
+                        </td>
+                        <td class="text relay_chanels">
+                            <div class="inner_relay_chanels">
+            
+                            </div>
+                        </td>
+                        <td class="text sensor_chanels">
+                            <div class="inner_sensor_chanels">
+            
+                            </div>
+                        </td>
+                        <td class="text">
+                            {{ device.note }} 
+                        </td>               
+                    </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+{% endblock body %}

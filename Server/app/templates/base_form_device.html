@@ -1,0 +1,8 @@
+{% extends 'base_form.html' %}
+
+{% block date_form %}
+    {{ render_field(form.name, class="input" + " " + form.name.name) }}
+    {{ render_field(form.ip, class="input" + " " + form.ip.name) }}
+    {{ render_field(form.note, class="input" + " " + form.note.name, cols="30", rows="10") }}
+    {{ render_field(form.position_index, class="input" + " " + form.position_index.name) }}
+{% endblock date_form %}

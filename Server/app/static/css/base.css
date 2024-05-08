@@ -1,0 +1,247 @@
+* {
+    margin: 0;
+    padding: 0;
+    outline: none;
+    font-family: 'Montserrat', sans-serif;
+}
+
+body {
+    background: #f4f5f8;
+}
+
+/* ХЕДДЕР */
+
+header {
+    color: #fff;
+    width: 100%;
+    min-width: 40%;
+    height: 50px;
+    background: linear-gradient(-45deg, #00537e, #3aa17e);
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 4px 4px 0 rgba(0, 0, 0, .2);
+}
+
+header nav {
+    margin-right: 20px;
+}
+
+header ul {
+    list-style-type: none;
+    display: flex;
+}
+
+header a {
+    color: #fff;
+    display: block;
+    text-transform: uppercase;
+    text-decoration: none;
+    padding: 0 15px;
+    transition: .4s;
+}
+
+header a:hover {
+    color: #3498db;
+}
+
+/* ХЕДДЕР */
+
+/* Главная страница */
+
+.body_section {
+    margin-top: 30px
+}
+
+.main_table {
+    width: 100%;
+    height: 50px;
+    border-collapse: collapse;
+    border: 2px solid white;
+}
+
+.main_table td, th {
+    border: 1px solid lightslategray;
+    padding: 1px;
+}
+
+.main_table a {
+    text-decoration: none;
+    color: black;
+}
+
+.main_table a:hover {
+    color: blue;
+}
+
+.circle {
+    border-radius: 50%;
+    padding: 7px;
+    width: 2px;
+    height: 2px;
+}
+
+.text {
+    text-align: center;
+}
+
+.chanel {
+    padding: 5px;
+}
+
+.chanel div {
+    display: inline-block;
+}
+
+.inner_relay_chanels .state {
+    text-align: center;
+}
+
+.btn > button > img{
+    width: 20px;
+    height: 20px;
+}
+
+.namber {
+    width: 30px;
+}
+
+.action {
+    width: 80px;
+}
+
+.name {
+    width: 250px;
+}
+
+.ip {
+    width: 110px;
+}
+
+.status {
+    width: 70px;
+}
+
+.voltage_levels {
+    width: 125px;
+    text-align: left;
+}
+
+.relay_chanels {
+    width: 125px;
+}
+
+.sensor_chanels {
+    width: 125px;
+}
+
+/* Главная страница */
+
+/* Форма добавления, изменения и удаления */
+#form {
+    background-color: #FFF;
+    width: 600px;
+    margin-right: auto;
+    margin-left: auto;
+    margin-top: 0px;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    padding: 0px;
+    text-align:center;
+}
+
+#form .form-group {
+    padding: 10px;
+}
+
+#form label {
+    font-size: 18px;
+    height: 20px;
+    width: 300px;
+    margin-top: 10px;
+    margin-left: 10px;
+    text-align: left;
+    margin-right:15px;
+    float:left;
+}
+
+#form input {
+    height: 30px;
+    width: 200px;
+    border: 1px solid #000;
+    margin-top: 10px;
+    text-align: center;
+}
+
+#form textarea {
+    width: 200px;
+    resize: none;
+    margin-top: 10px;
+    border: 1px solid #000;
+    text-align: center;
+}
+
+#form .btn {
+    width: 250px;
+    margin-bottom: 10px;
+    color: #fff;
+    border-radius: 10px;
+    text-transform: uppercase;
+}
+
+#form .btn:hover {
+    transform: scale(1.2);
+}
+
+#form .btn.submit  {
+    background-color: green;
+}
+
+#form .btn.reset {
+    background-color: gray;
+}
+
+#form .btn.delete  {
+    background-color: red;
+}
+
+/* Форма добавления, изменения и удаления */
+
+.error {
+    color: red;
+}
+
+.success {
+    color: green;
+}
+
+/* Страница пользователя */
+
+.profile_container {
+    text-align: center;
+    width: 350px;
+    height: 284px;
+    margin: 0 auto;
+}
+
+.inner_profile_container {
+    margin: 10px;
+    padding: 20px;
+    display: inline-block; 
+    text-align: left;
+    border: 2px solid black;
+    border-radius: 10px;
+    width: 320px;
+    height: 220px;
+}
+
+.inner_profile_container > h2 {
+    border-bottom: 1px solid black;
+    margin-bottom: 5px;
+}
+
+.inner_profile_container > ul > li {
+    list-style-type: none; 
+    padding: 10px 0 10px 0;
+}

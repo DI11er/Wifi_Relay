@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+
+
+{% block title %}{{ title }}{% endblock title %}
+
+{% block body %}
+    <div class="profile_container">
+        <div class="inner_profile_container">
+            <h2>Logged in User details</h2>
+            <ul>
+                <li>Username: {{ current_user.username }}</li>
+                <li>Email: {{ current_user.email }}</li>
+                <li>Created on: {{ moment( current_user.created_on ).format('LLL') }}</li>
+                <li>Updated on: {{ moment( current_user.updated_on ).format('LLL') }}</li>
+                <li>Is admin: {{ current_user.is_admin }}</li>
+            </ul>
+        </div>
+    </div>
+{% endblock body %}

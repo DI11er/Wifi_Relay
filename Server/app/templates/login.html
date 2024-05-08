@@ -1,0 +1,16 @@
+{% extends 'base_form.html' %}
+
+
+{% block title %}{{ title }}{% endblock title %}
+
+{% block title_form %}Форма авторизации{% endblock title_form %}
+
+{% block date_form %}
+    {{ render_field(form.username, class="input" + " " + form.username.name) }}
+    {{ render_field(form.password, class="input" + " " + form.password.name) }}
+    {{ render_field(form.remember_me, class="input" + " " + form.remember_me.name) }}
+{% endblock date_form %}
+
+{% block buttons %}
+    {{ form.submit(class_="btn submit" + " " + form.submit.name) }}
+{% endblock buttons %}

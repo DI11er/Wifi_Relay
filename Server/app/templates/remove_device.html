@@ -1,0 +1,11 @@
+{% extends 'base_form_device.html' %}
+
+
+{% block title %}{{ title }}{% endblock title %}
+
+{% block title_form %}Форма удаления устройства{% endblock title_form %}
+
+{% block buttons %}
+    {{ form.submit(class_="btn delete" + " " + form.submit.name) }}
+{% endblock buttons %}
+

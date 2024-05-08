@@ -1,0 +1,6 @@
+python app.py flask db init -> Создание репозитория миграции и первоначальной миграции 
+python app.py flask db migrate -> Создание уникального файла миграции
+python app.py flask db upgrade -> Применение миграций к базе данных
+python app.py flask db downgrade -> Откат последней миграции 
+python app.py flask run
+python app.py flask db migrate -m "Table" -> флаг m указывает коментарий для миграции

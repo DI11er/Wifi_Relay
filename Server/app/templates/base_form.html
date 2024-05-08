@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% from "macros.html" import render_field %}
+
+{% block title %}{{ title }}{% endblock title %}
+
+{% block body %}
+    <div id="form">
+        <form action="" method="post" novalidate id="base_form">
+            <div>
+                {{ form.csrf_token }}
+            </div>
+            <h1>{% block title_form %}{% endblock title_form %}</h1>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="message">
+                        {% for category, message in  messages %}
+                            <spam class="{{ category }}">{{ message }}</spam>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+            <fieldset>
+            {% block date_form %}{% endblock date_form %}
+            {% block buttons %}{% endblock buttons %}
+        </form>
+    </div>
+{% endblock body %}
+
+
+    
+
+
+
