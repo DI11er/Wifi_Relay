@@ -11,64 +11,56 @@
 #include <Hash.h>
 
 #include "voltage.h"
-
-#include <SoftwareSerial.h>
+#include "sensor.h"
+#include "relay.h"
+#include "gsm.h"
 
 ESP8266WiFiMulti WiFiMulti;
 SocketIOclient socketIO;
 
-#define ssid "ASUS_5"                                  // Название WiFi
-#define password "Admin1512"                     // Пароль от WiFi
+#define GSM_RX 13                                     // D7 RX - модуля к TX - GSM модуля
+#define GSM_TX 15                                     // D8 TX - модуля к RX - GSM модуля
 
-#define address_server "213.155.193.31"                 // Адрес сервера
+GsmManager GSM(GSM_TX, GSM_RX, 9600);                 // Экземпляр gsm
+
+RelayManager R1(3, true);                             // Экземпляр реле 1
+RelayManager R2(4, true);                             // Экземпляр реле 2
+RelayManager RELAY_GSM_PIN(8, true);                  // Экземпляр реле питания модуля GSM
+RelayManager RELAY_SENSOR_PIN(21, true);              // Экземпляр реле питания сенсоров
+
+SensorManager S1(10, false, false);                   // Экземпляр сенсора 1
+SensorManager S2(20 , false);                         // Экземпляр сенсора 2
+
+VoltageManager U1(0, 0.97, 0.98);                     // Экземпляр сенсора питания
+
+#define ssid ""                                       // Название WiFi
+#define password ""                                   // Пароль от WiFi
+
+#define address_server "192.168.9.34"                 // Адрес сервера
 #define port_server 4145                              // Порт сервера
 
-IPAddress local_IP(192, 168, 1, 66);                  // Устанавливаем статический IP адрес
-IPAddress gateway(192, 168, 1, 5);                    // Устанавливаем IP адрес шлюза
+IPAddress local_IP(192, 168, 9, 66);                  // Устанавливаем статический IP адрес
+IPAddress gateway(192, 168, 9, 1);                    // Устанавливаем IP адрес шлюза
 IPAddress subnet(255, 255, 255, 0);                   // Устанавливаем маску сети
 
-#define RELAY1_PIN D1
-#define RELAY2_PIN D2
-#define RELAY_GSM_PIN D3
-#define SENSOR1_PIN D5
-#define SENSOR2_PIN D6
-#define RELAY_SENSOR_PIN D4
+#define update_relay 1                                // Время опроса данных и отправки на сервер в минутах
+#define update_sensor_state 20                        // Время опроса состояния сенсеров в секундах
 
-#define GSM_RX 13 // D7
-#define GSM_TX 15 // D8
+#define U1_voltage_level 3.5                          // Пороговый уровень напряжения
 
-#define update_relay 1 // минуты
-#define update_sensor 20 // секунды
+String ip;                                            // Переменная для хранения ip-адреса устройства
 
-#define U1_voltage_level 3.6
+bool sensor_voltage1_flag = true;                     // Флаг для контроля напряжения
 
-String ip;
+float U1_voltage = 0.0;                               // Переменная для хранения напряжения на канале U1
 
-bool relay1 = true;
-bool relay2 = true;
+bool flag_init_gsm = true;                            // Флаг инициализации GSM
 
-bool sensor1 = false;
-bool sensor2 = false;
+bool flag_state_connection = false;                   // Флаг наличия подключения к серверу
 
-bool sensor1_flag = true;
-bool sensor2_flag = true;
 
-bool sensor_voltage1_flag = true;
 
-float U1_voltage = 0.0;
-
-int countTry = 0;                                     // Количество неудачных попыток авторизации
-String _response = "";                                // Переменная для хранения ответов модуля
-String result = "";                                   // Переменная для хранения вводимых данных через DTMF
-const String pass = "1923";                           // Пароль для авторизации
-bool flag_pre_auth = true;                            // Флаг авторизации
-
-bool flag_init_gsm = true;
-bool flag_server_life = false;
-
-SoftwareSerial mySerial(GSM_RX, GSM_TX, false);               // Программный UART GSM модуля
-
-// раздефайнить или задефайнить для использования
+// для включения отладки нужно раскоментировать переменную DEBUG_ENABLE
 #define DEBUG_ENABLE
 
 #ifdef DEBUG_ENABLE
@@ -80,20 +72,7 @@ SoftwareSerial mySerial(GSM_RX, GSM_TX, false);               // Програм�
 
 
 void setup() {
-  pinMode(A0, INPUT);
-  pinMode(SENSOR1_PIN, INPUT);
-  pinMode(SENSOR2_PIN, INPUT);
-  pinMode(RELAY1_PIN, OUTPUT);                                           // Меняем режим работы пина на вывод сигнала
-  pinMode(RELAY2_PIN, OUTPUT);                                           // Меняем режим работы пина на вывод сигнала
-  pinMode(RELAY_GSM_PIN, OUTPUT);  
-  pinMode(RELAY_SENSOR_PIN, OUTPUT);
-  digitalWrite(RELAY1_PIN, relay1);                                           
-  digitalWrite(RELAY2_PIN, relay2);                                    
-  digitalWrite(RELAY_GSM_PIN, true);  
-  digitalWrite(RELAY_SENSOR_PIN, true);               // Выключаем реле сенсеров
-
-
-  U1_voltage = get_voltage(0);
+  U1_voltage = U1.get_voltage();
 
   #ifdef DEBUG_ENABLE
     Serial.begin(9600);
@@ -104,248 +83,20 @@ void setup() {
   #endif
 
   init_websocketio_clint();
-
 }
 
 void loop() {
   socketIO.loop();
-  handler_update_data_timer();
-  handler_sensor_timer();
+  
+  if (flag_state_connection) {
+    handler_update_data_timer();
+    handler_sensor_timer();
+  }
 
   if (!flag_init_gsm) {
-    handler_gsm();
-  }
-
-  #ifdef DEBUG_ENABLE
-    handler_serials();
-  #endif
-}
-
-
-/* GSM */
-
-// Отдельная функция для настройки gsm модуля
-void init_gsm_model() {
-  DEBUG_PRINT("[GSM DEBUG] -> Start Init");
-  mySerial.begin(9600);
-
-  byte i = 0;
-
-  while(!mySerial) {}
-
-  do {
-    _response = sendATCommand(F("AT"), true);  // Включение DTMF (тонального набора)
-    _response.trim();                       // Убираем пробельные символы в начале и конце
-    i++;
-  } while (_response != "OK" && i <= 5);              // Не пускать дальше, пока модем не вернет ОК
-  
-
-  i = 0;
-  do {
-    _response = sendATCommand(F("AT+CREG?"), true);                   // Проверка регистрации в сети
-    _response.trim();                                                 // Убираем пробельные символы в начале и конце
-    delay(100);
-    i++;
-  } while (_response.substring(_response.indexOf(F(",")) + 1, _response.length()).toInt() != 1 && i <= 5);
-
-
-  i = 0;
-  do {
-    _response = sendATCommand(F("AT+DDET=1"), true);  // Включение DTMF (тонального набора)
-    _response.trim();                       // Убираем пробельные символы в начале и конце
-    i++;
-  } while (_response != "OK" && i <= 5);              // Не пускать дальше, пока модем не вернет ОК
-
-  i = 0;
-  do {
-    _response = sendATCommand(F("AT+CLIP=1"), true);  // Включаем АОН
-    _response.trim();                       // Убираем пробельные символы в начале и конце
-    i++;
-  } while (_response != "OK" && i <= 5);              // Не пускать дальше, пока модем не вернет ОК
-
-  i = 0;
-  do {
-    _response = sendATCommand(F("AT+CMGF=1"), true);         // Включить TextMode для SMS
-    _response.trim();                       // Убираем пробельные символы в начале и конце
-    i++;
-  } while (_response != "OK" && i <= 5);              // Не пускать дальше, пока модем не вернет ОК
-
-
-  if (i >= 6) {DEBUG_PRINT("[GSM DEBUG] -> Not Connect");}
-  else {DEBUG_PRINT("[GSM DEBUG] -> Connect");}
-  
-}
- 
-// Отдельная функция для обработки данных поступаемых из UART
-void handler_serials() {
-  #ifdef DEBUG_ENABLE
-    if (Serial.available()) {             // Ожидаем команды по Serial...
-      mySerial.write(Serial.read());    // ...и отправляем полученную команду модему
-    }
-    if (mySerial.available()) { 
-      Serial.write(mySerial.read()); 
-    }
-  #endif
-}
-
-// Отдельная функция для обработки данных поступаемых от GSM
-void handler_gsm() {
-  if (mySerial.available())   {                 // Если модем, что-то отправил...
-    _response = waitResponse();                 // Получаем ответ от модема для анализа
-    DEBUG_PRINT(_response);                  // Если нужно выводим в монитор порта
-
-    int index = -1;
-    do  {                                       // Перебираем построчно каждый пришедший ответ
-      index = _response.indexOf("\r\n");        // Получаем идекс переноса строки
-      String submsg = "";
-      if (index > -1) {                         // Если перенос строки есть, значит
-        submsg = _response.substring(0, index); // Получаем первую строку
-        _response = _response.substring(index + 2); // И убираем её из пачки
-      }
-      else {                                    // Если больше переносов нет
-        submsg = _response;                     // Последняя строка - это все, что осталось от пачки
-        _response = "";                         // Пачку обнуляем
-      }
-      submsg.trim();                            // Убираем пробельные символы справа и слева
-      if (submsg != "") {                       // Если строка значимая (не пустая), то распознаем уже её
-        DEBUG_PRINT("submessage: " + submsg);
-        if (submsg.startsWith("+DTMF:")) {      // Если ответ начинается с "+DTMF:" тогда:
-          String symbol = submsg.substring(7, 8);  // Выдергиваем символ с 7 позиции длиной 1 (по 8)
-          processingDTMF(symbol);               // Логику выносим для удобства в отдельную функцию
-        }
-
-        if (submsg.startsWith("RING")) {         // Есть входящий вызов
-          int phoneindex = _response.indexOf("+CLIP: \""); // Есть ли информация об определении номера, если да, то phoneindex>-1
-          String innerPhone = "";                   // Переменная для хранения определенного номера
-          if (phoneindex >= 0) {                    // Если информация была найдена
-            phoneindex += 8;                        // Парсим строку и ...
-            innerPhone = _response.substring(phoneindex, _response.indexOf("\"", phoneindex)); // ...получаем номер
-            DEBUG_PRINT("Number: " + innerPhone); // Выводим номер в монитор порта
-          }
-          // Проверяем, чтобы длина номера была больше 6 цифр, и номер должен быть в списке
-          if (innerPhone.length() >= 7) {
-            sendATCommand(F("ATA"), true);        // Если да, то отвечаем на вызов
-          }
-          else {
-            sendATCommand(F("ATH"), true);        // Если нет, то отклоняем вызов
-          }
-        }
-
-        if (submsg.startsWith(F("NO CARRIER"))) {                // Завершение звонка
-          sendATCommand(F("ATH"), true); 
-        }
-        if (submsg.startsWith("+CMGS:")) {       // Пришло сообщение об отправке SMS
-          int index = submsg.lastIndexOf("\r\n");// Находим последний перенос строки, перед статусом
-          String result = submsg.substring(index + 2, submsg.length()); // Получаем статус
-          result.trim();                            // Убираем пробельные символы в начале/конце
-
-          if (result == "OK") {                     // Если результат ОК - все нормально
-            DEBUG_PRINT(F("Message was sent. OK"));
-          }
-          else {                                    // Если нет, нужно повторить отправку
-            DEBUG_PRINT(F("Message was not sent. Error"));
-          }
-        }
-      }
-    } while (index > -1);                       // Пока индекс переноса строки действителен
+    GSM.handler_gsm();
   }
 }
-
-// Отдельная функция для обработки логики DTMF
-void processingDTMF(String symbol) {
-  DEBUG_PRINT("Key: " + symbol);             // Выводим в Serial для контроля, что ничего не потерялось
-  if (!flag_pre_auth) {
-    if (symbol == "#") {
-      bool correct;                             // Для оптимизации кода, переменная корректности команды
-      correct = handler_command(result);
-      if (!correct) DEBUG_PRINT("Incorrect command: " + result); // Если команда некорректна, выводим сообщение
-      result = "";                                       // После каждой решетки сбрасываем вводимую комбинацию
-    }
-    else {
-      result += symbol;                               // Если нет, добавляем в конец
-    }
-  }
-  else {
-   auth(symbol);
-  }
-}
-
-// Отдельная функция для обработки комманд DTMF
-bool handler_command(String command) {
-  if (command == "111") {
-    sendATCommand(F("AT+VTS=\"1,4\""), true);
-    return true;
-  }
-
-  return false;
-}
-
-// Отдельная функция для обработки авторизации
-void auth(String symbol) {
-  if (countTry < 3) {                                 // Если 3 неудачных попытки, перестаем реагировать на нажатия
-    DEBUG_PRINT((String)"[GSM DEBUG AUTH]" + result);
-    if (symbol == "#") {
-      bool correct = false;  
-      if (result == pass) {                           // Введенная строка совпадает с заданным паролем
-        DEBUG_PRINT("The correct password is entered: " + result); // Информируем о корректном вводе пароля
-        countTry = 0;                                 // Обнуляем счетчик неудачных попыток ввода
-        flag_pre_auth = false;
-        sendATCommand(F("AT+VTS=\"1,4\""), true);
-      }
-      else {
-        countTry += 1;                                // Увеличиваем счетчик неудачных попыток на 1
-        DEBUG_PRINT(F("Incorrect password"));         // Неверный пароль
-        DEBUG_PRINT("Counter:" + (String)countTry);// Количество неверных попыток
-      }
-      result = "";                                    // После каждой решетки сбрасываем вводимую комбинацию 
-    }
-    else {
-      result += symbol;
-    }
-  }
-  else {
-    sendATCommand(F("ATH"), true);        // Если количество неудачных папыток привысило 3, то отклоняем вызов
-  }
-}
-
-// Отдельная функция для отправки комманд в GSM
-String sendATCommand(String cmd, bool waiting) {
-  String _resp = "";                            // Переменная для хранения результата
-  DEBUG_PRINT("[GSM DEBUG] -> " + cmd);                          // Дублируем команду в монитор порта
-  mySerial.println(cmd);                          // Отправляем команду модулю
-  if (waiting) {                                // Если необходимо дождаться ответа...
-    _resp = waitResponse();                     // ... ждем, когда будет передан ответ
-    // Если Echo Mode выключен (ATE0), то эти 3 строки можно закомментировать
-    if (_resp.startsWith(cmd)) {  // Убираем из ответа дублирующуюся команду
-      _resp = _resp.substring(_resp.indexOf("\r", cmd.length()) + 2);
-    }
-    DEBUG_PRINT("[GSM DEBUG] -> " + _resp);                      // Дублируем ответ в монитор порта
-  }
-  return _resp;                                 // Возвращаем результат. Пусто, если проблема
-}
-
-// Отдельная функция для получения ответа от GSM
-String waitResponse() {                         // Функция ожидания ответа и возврата полученного результата
-  String _resp = "";                            // Переменная для хранения результата
-  long _timeout = millis() + 10000;             // Переменная для отслеживания таймаута (10 секунд)
-  while (!mySerial.available() && millis() < _timeout)  {}; // Ждем ответа 10 секунд, если пришел ответ или наступил таймаут, то...
-  if (mySerial.available()) {                     // Если есть, что считывать...
-    _resp = mySerial.readString();                // ... считываем и запоминаем
-  }
-  else {                                        // Если пришел таймаут, то...
-    DEBUG_PRINT((String)"[GSM DEBUG] -> " + "Timeout...");               // ... оповещаем об этом и...
-  }
-  return _resp;                                 // ... возвращаем результат. Пусто, если проблема
-}
-
-// Отдельная функция для отправки sms
-void sendSMS(String phone, String message) {
-  sendATCommand("AT+CMGS=\"" + phone + "\"", true);             // Переходим в режим ввода текстового сообщения
-  sendATCommand(message + "\r\n" + (String)((char)26), true);   // После текста отправляем перенос строки и Ctrl+Z
-}
-
-/* GSM */
-
 
 
 
@@ -359,13 +110,13 @@ void init_websocketio_clint() {
   WiFi.config(local_IP, gateway, subnet);
 
   // disable AP
-  if(WiFi.getMode() & WIFI_AP) {
+  if (WiFi.getMode() & WIFI_AP) {
       WiFi.softAPdisconnect(true);
   }
   
   WiFiMulti.addAP(ssid, password);
 
-  while(WiFiMulti.run() != WL_CONNECTED) {
+  while (WiFiMulti.run() != WL_CONNECTED) {
       DEBUG_PRINT(F("."));
       delay(100);
   }
@@ -386,13 +137,13 @@ void socketIOEvent(socketIOmessageType_t type, uint8_t * payload, size_t length)
       DEBUG_PRINT(F("[WebSocketIO DEBUG] -> DISCONNECT"));
       if (flag_init_gsm) {
         flag_init_gsm = false;
-        digitalWrite(RELAY_GSM_PIN, false); 
+        RELAY_GSM_PIN.set_state(false);       // Включение GSM модема  
         delay(10000); 
-        init_gsm_model();
+        GSM.init_gsm_model();
       }
 
-      if (flag_server_life) {
-        flag_server_life = false;
+      if (flag_state_connection) {
+        flag_state_connection = false;
       }
       break;
     }
@@ -405,11 +156,11 @@ void socketIOEvent(socketIOmessageType_t type, uint8_t * payload, size_t length)
       get_relay_parameters();
       delay(100);
 
-      flag_server_life = true;
+      flag_state_connection = true;
       flag_init_gsm = true; 
 
-      digitalWrite(RELAY_GSM_PIN, true);  
-
+      RELAY_GSM_PIN.set_state(true);       // Отключение GSM модема
+      GSM.drop_serial();
       break;
     }
     case sIOtype_EVENT: {
@@ -422,7 +173,7 @@ void socketIOEvent(socketIOmessageType_t type, uint8_t * payload, size_t length)
 // Обработчик команд
 void handler_commands(uint8_t * payload, size_t length) {
   /* Обработчик комман */
-  DynamicJsonDocument doc(1024);
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, payload, length);
   if (error) { 
     return; 
@@ -454,20 +205,20 @@ void handler_sensor(String chanel_name, String action) {
   /* Обработчик сенсеров */
   if (chanel_name == "S1") {
     if (action == "toggle") {
-      sensor1 = !sensor1;
+      S1.toggle();
     }
   } 
   
   if (chanel_name == "S2") {
     if (action == "toggle") {
-      sensor2 = !sensor2;
+      S2.toggle();
     } 
   }
 
-  if (sensor1 || sensor2) {
-    digitalWrite(RELAY_SENSOR_PIN, false);
+  if (S1.get_state() || S2.get_state()) {
+    RELAY_SENSOR_PIN.set_state(false);
   } else {
-    digitalWrite(RELAY_SENSOR_PIN, true); 
+    RELAY_SENSOR_PIN.set_state(true);
   }
 }
 
@@ -476,30 +227,16 @@ void handler_relay(String chanel_name, String action) {
   /* Обработчик реле */
   if (chanel_name == "R1") {
     if (action == "toggle") {
-      relay1 = !relay1;  
-      digitalWrite(RELAY1_PIN, relay1);
-    } 
-    if (action == "restart") {
-      relay1 = false;
-      digitalWrite(RELAY1_PIN, LOW);
-      get_relay_parameters();
-      relay1 = true;
-      delay(10000);
-      digitalWrite(RELAY1_PIN, HIGH);  
+      R1.toggle();
+    } else if (action == "restart") {
+      R1.restart();
     }
   } 
   if (chanel_name == "R2") {
     if (action == "toggle") {
-      relay2 = !relay2;
-      digitalWrite(RELAY2_PIN, relay2); 
-    } 
-    if (action == "restart") {
-      relay2 = false;
-      digitalWrite(RELAY2_PIN, LOW);
-      get_relay_parameters();
-      relay2 = true;
-      delay(10000);
-      digitalWrite(RELAY2_PIN, HIGH);  
+      R2.toggle();
+    } else if (action == "restart") {
+      R2.restart();
     }
   }
 }
@@ -509,7 +246,7 @@ void handler_voltage(String chanel_name, String action) {
   /* Обработчик напряжений */
   if (chanel_name == "U1") {
     if (action == "measure") {
-      U1_voltage = get_voltage(0);
+      U1_voltage = U1.get_voltage();
     }
   }
 }
@@ -520,7 +257,7 @@ void handler_update_data_timer() {
 
   if(millis() - tmr > (update_relay * 60 * 1000)) {
     tmr = millis();
-    U1_voltage = get_voltage(0);
+    U1_voltage = U1.get_voltage();
     voltage_monitoring();
     get_relay_parameters();
   }
@@ -528,7 +265,7 @@ void handler_update_data_timer() {
 
 // функция для контроля напряжения
 void voltage_monitoring() {
-  DynamicJsonDocument doc(1024);
+  JsonDocument doc;
 
   doc[0] = "voltage_low_signal";
 
@@ -552,53 +289,54 @@ void voltage_monitoring() {
 void handler_sensor_timer() {
   static uint32_t tmr;
 
-  if(millis() - tmr > (update_sensor * 1000)) {
+  if(millis() - tmr > (update_sensor_state * 1000)) {
     tmr = millis();
 
-    /* Функция для добавления пользователя в группу relay */
-    DynamicJsonDocument doc(1024);
+    if (S1.get_value() || S2.get_value()) {
+      JsonDocument doc;
 
-    doc[0] = "alarm_signal";
+      doc[0] = "alarm_signal";
 
-    doc[1]["ip"] = ip;
+      doc[1]["ip"] = ip;
+        
+      if (S1.get_state() && S1.get_value() && S1.get_sensor_flag()) {
+        doc[1]["chanel"]["name"] = "S1";
+        doc[1]["chanel"]["description"] = "Датчик открытия двери";
+        S1.set_sensor_flag(false);
+        String buffer;
+        serializeJson(doc, buffer);
+
+        DEBUG_PRINT(F("Sensor 1 Alarm"));
+
+        // Отправка события
+        socketIO.sendEVENT(buffer);
+        get_relay_parameters();
+      }
       
-    if (sensor1 && digitalRead(SENSOR1_PIN) && sensor1_flag) {
-      doc[1]["chanel"]["name"] = "S1";
-      doc[1]["chanel"]["description"] = "Датчик открытия двери";
-      sensor1_flag = false;
-      String buffer;
-      serializeJson(doc, buffer);
+      if (S2.get_state() && S2.get_value() && S2.get_sensor_flag()) {
+        doc[1]["chanel"]["name"] = "S2";
+        doc[1]["chanel"]["description"] = "Датчик наклона";
+        S2.set_sensor_flag(false);
+        String buffer;
+        serializeJson(doc, buffer);
 
-      DEBUG_PRINT(F("Sensor 1 Alarm"));
+        DEBUG_PRINT(F("Sensor 2 Alarm"));
 
-      // Send event
-      socketIO.sendEVENT(buffer);
-      get_relay_parameters();
+        // Отправка события
+        socketIO.sendEVENT(buffer);
+        get_relay_parameters();
+      } 
     }
-    
-    if (sensor2 && !digitalRead(SENSOR2_PIN) && sensor2_flag) {
-      doc[1]["chanel"]["name"] = "S2";
-      doc[1]["chanel"]["description"] = "Датчик наклона";
-      sensor2_flag = false;
-      String buffer;
-      serializeJson(doc, buffer);
 
-      DEBUG_PRINT(F("Sensor 2 Alarm"));
-
-      // Send event
-      socketIO.sendEVENT(buffer);
-      get_relay_parameters();
-    } 
-      
-    if (digitalRead(SENSOR1_PIN) == LOW) {sensor1_flag = true;}
-    if (digitalRead(SENSOR2_PIN) == HIGH) {sensor2_flag = true;}
+    if (!S1.get_value()) {S1.set_sensor_flag(true);}
+    if (!S2.get_value()) {S2.set_sensor_flag(true);}
   }
 }
 
 // Функция для отправки события о подключение к комнате на сервер
 void join_room_event() {
   /* Функция для добавления пользователя в группу relay */
-  DynamicJsonDocument doc(1024);
+  JsonDocument doc;
 
   doc[0] = "join_room";
 
@@ -615,9 +353,8 @@ void join_room_event() {
 
 // Функция для отправки данных на сервер
 void get_relay_parameters() {
-  if (!flag_server_life) { return; }
   /* Формирования JSON для оправки данных на сервер через WebSocketIO */
-  DynamicJsonDocument doc(1024);
+  JsonDocument doc;
   
   /* Событие */
   doc[0] = "relay_parameters";
@@ -628,20 +365,20 @@ void get_relay_parameters() {
   doc[1]["data"]["voltage_info"][0]["voltage"] = U1_voltage;
 
   doc[1]["data"]["relay_info"][0]["name"] = "R1";
-  doc[1]["data"]["relay_info"][0]["state"] = relay1;
+  doc[1]["data"]["relay_info"][0]["state"] = R1.get_state();
   doc[1]["data"]["relay_info"][1]["name"] = "R2";
-  doc[1]["data"]["relay_info"][1]["state"] = relay2;
+  doc[1]["data"]["relay_info"][1]["state"] = R2.get_state();
 
   doc[1]["data"]["sensor_info"][0]["name"] = "S1";
-  doc[1]["data"]["sensor_info"][0]["state_sensor"] = sensor1;
+  doc[1]["data"]["sensor_info"][0]["state_sensor"] = S1.get_state();
   doc[1]["data"]["sensor_info"][1]["name"] = "S2";
-  doc[1]["data"]["sensor_info"][1]["state_sensor"] = sensor2;
+  doc[1]["data"]["sensor_info"][1]["state_sensor"] = S2.get_state();
 
-  if (sensor1) {
-    doc[1]["data"]["sensor_info"][0]["alarm_signal"] = digitalRead(SENSOR1_PIN);
+  if (S1.get_state()) {
+    doc[1]["data"]["sensor_info"][0]["alarm_signal"] = S2.get_value();
   }
-  if (sensor2) {
-    doc[1]["data"]["sensor_info"][1]["alarm_signal"] = !digitalRead(SENSOR2_PIN);
+  if (S2.get_state()) {
+    doc[1]["data"]["sensor_info"][1]["alarm_signal"] = S2.get_value();
   }
   
   String buffer;

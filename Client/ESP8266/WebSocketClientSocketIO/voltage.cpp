@@ -1,20 +1,32 @@
 #include "voltage.h"
 
-static int number_measurements =  60;
+// реализация методов
+VoltageManager::VoltageManager(byte pin, float ratio1, float ratio2) {
+  _pin = pin;
 
-float get_voltage(int analog_pin) {
-  /* Измерение напряжение на аналоговом пине */
-  float voltage = 0.0;
-  for (int i = 0; i < number_measurements; i++) {
-    voltage += analogRead(analog_pin) * (15.4 / 1024.0);
+  _ratio1 = ratio1;
+  _ratio2 = ratio2;
+
+  pinMode(_pin, INPUT);
+} // конструктор
+
+float VoltageManager::get_voltage() {
+  _voltage = 0.0;
+
+  for (int i = 0; i < _number_measurements; i++) {
+    _voltage += (float)analogRead(_pin) * (_VREF / 1024);
     delay(10);
   }
-  
-  voltage /= number_measurements;
 
-  if (voltage < 0.25) { voltage = 0; }
-  else if (voltage > 5.5) { voltage *= RATIO1; } 
-  else if ( voltage < 5.5) { voltage *= RATIO2; } 
+  _voltage /= _number_measurements;
 
-  return voltage;
+  if (_voltage < 0.25) { _voltage = 0; }
+  else if (_voltage > 5.5) { _voltage *= _ratio1; } 
+  else if (_voltage < 5.5) { _voltage *= _ratio2; } 
+
+  return _voltage;
 }
+
+void VoltageManager::set_ratio1(float ratio) {_ratio1 = ratio;}
+
+void VoltageManager::set_ratio2(float ratio) {_ratio2 = ratio;}

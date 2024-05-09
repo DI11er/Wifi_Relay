@@ -1,8 +1,20 @@
-#include "Arduino.h"
+#pragma once
+#include <Arduino.h>
 
-// -> C = U(мультиметр) / U(выходное)
-#define RATIO1 0.97 // > 5.5
-#define RATIO2 0.98 // < 5.5
-
-
-float get_voltage(int analog_pin);
+// описание класса
+class VoltageManager {  // класс VoltageManager
+  public:
+    // список членов, доступных в программе
+    VoltageManager(byte pin, float ratio1=1.0, float ratio2=1.0); // конструктор
+    float get_voltage();  // метод для получения напряжения
+    void set_ratio1(float ratio); // метод для установки коэффициента коррекции измеряемого напряжения
+    void set_ratio2(float ratio); // метод для установки коэффициента коррекции измеряемого напряжения
+  private:
+    // список членов для использования внутри класса
+    byte _pin;  // номер пина
+    float _voltage; // переменная для хранения напряжения
+    int _number_measurements = 60;  // количество выборок
+    float _VREF = 15.4;  // опорное напряжение
+    float _ratio1; // коэффициент коррекции измеряемого напряжения > 5.5 в
+    float _ratio2; // коэффициент коррекции измеряемого напряжения < 5.5 в
+};
